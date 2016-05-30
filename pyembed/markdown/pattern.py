@@ -21,6 +21,8 @@
 # THE SOFTWARE.
 
 from markdown.inlinepatterns import Pattern
+import re
+import types
 
 try:  # pragma: no cover
     from urlparse import parse_qs
@@ -40,21 +42,32 @@ class PyEmbedPattern(Pattern):
 
     def handleMatch(self, m):
         url = m.group(4)
-        (max_width, max_height) = self.__parse_params(m.group(3))
+        (max_width, max_height, tag_class) = self.__parse_params(m.group(3))
         html = self.pyembed.embed(url, max_width, max_height)
+
+        # if a tag_class is specified, insert it into the first tag
+        if tag_class:
+            m = re.search('^(<[^\s]+)(.+)$', html)
+            if m:
+                html = m.group(1) + ' class="' + tag_class + '"' + m.group(2)
+
         return self.md.htmlStash.store(html)
 
     def __parse_params(self, query_string):
         if not query_string:
-            return None, None
+            return None, None, None
 
         query_params = parse_qs(query_string)
-        return (self.__get_query_param(query_params, 'max_width'),
-                self.__get_query_param(query_params, 'max_height'))
+        return (self.__get_query_param(query_params, 'max_width', int),
+                self.__get_query_param(query_params, 'max_height', int),
+                self.__get_query_param(query_params, 'tag_class'))
 
     @staticmethod
-    def __get_query_param(query_params, name):
+    def __get_query_param(query_params, name, force_type = None):
         if name in query_params:
-            return int(query_params[name][0])
+            if isinstance(force_type, types.TypeType):
+                return force_type(query_params[name][0])
+            else:
+                return query_params[name][0]
         else:
             return None
